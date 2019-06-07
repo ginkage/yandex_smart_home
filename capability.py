@@ -136,6 +136,7 @@ class OnOffCapability(_Capability):
     async def set_state(self, data, state):
         """Set device state."""
         domain = self.state.domain
+        value = None
 
         if type(state['value']) is not bool:
             raise SmartHomeError(ERR_INVALID_VALUE, "Value is not boolean")
@@ -151,12 +152,21 @@ class OnOffCapability(_Capability):
             service_domain = domain
             service = vacuum.SERVICE_START if state['value'] else \
                 vacuum.SERVICE_RETURN_TO_BASE
+        elif domain == climate.DOMAIN:
+            service_domain = domain
+            service = climate.SERVICE_SET_OPERATION_MODE
+            operation = self.state.attributes.get(climate.ATTR_OPERATION_MODE)
+            if operation is not None and state['value'] == (operation != 'off'):
+                raise SmartHomeError(ERR_NOT_SUPPORTED_IN_CURRENT_MODE,
+                                     "Device is already in the requested state")
+            value = 'auto' if state['value'] else 'off'
         else:
             service_domain = domain
             service = SERVICE_TURN_ON if state['value'] else SERVICE_TURN_OFF
 
         await self.hass.services.async_call(service_domain, service, {
-            ATTR_ENTITY_ID: self.state.entity_id
+            ATTR_ENTITY_ID: self.state.entity_id,
+            climate.ATTR_OPERATION_MODE: value
         }, blocking=True, context=data.context)
 
 
